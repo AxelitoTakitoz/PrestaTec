@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../app/routes.dart';
 import '../../admin/presentation/historial_prestamos_admin.dart';
 import '../../admin/presentation/generar_reporte_admin.dart';
+import '../../admin/presentation/materials_list_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -17,14 +18,13 @@ class AdminHomeScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop(); // Cierra el diálogo
+                Navigator.of(dialogContext).pop();
               },
               child: const Text('Cancelar'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop(); // Cierra el diálogo
-                // Navega al login y elimina el historial
+                Navigator.of(dialogContext).pop();
                 Navigator.of(context).pushReplacementNamed(AppRoutes.login);
               },
               child: const Text('Cerrar sesión'),
@@ -49,9 +49,9 @@ class AdminHomeScreen extends StatelessWidget {
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              PopupMenuItem<String>(
+              const PopupMenuItem<String>(
                 value: 'logout',
-                child: const Text('Cerrar sesión'),
+                child: Text('Cerrar sesión'),
               ),
             ],
             icon: const Icon(Icons.more_horiz),
@@ -81,6 +81,11 @@ class AdminHomeScreen extends StatelessWidget {
             builder: (context) => const GenerarReporteAdmin(),
           ),
         ),
+        onMaterialsList: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const MaterialsListScreen(),
+          ),
+        ),
       ),
     );
   }
@@ -94,6 +99,7 @@ class _CurvedActionsBar extends StatelessWidget {
   final VoidCallback onRegister;
   final VoidCallback onHistory;
   final VoidCallback onReport;
+  final VoidCallback onMaterialsList;
 
   const _CurvedActionsBar({
     required this.primary,
@@ -103,6 +109,7 @@ class _CurvedActionsBar extends StatelessWidget {
     required this.onRegister,
     required this.onHistory,
     required this.onReport,
+    required this.onMaterialsList,
   });
 
   @override
@@ -110,7 +117,7 @@ class _CurvedActionsBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: SizedBox(
-        height: 210,
+        height: 240, // Aumentado para acomodar 3 botones
         child: Stack(
           alignment: Alignment.bottomCenter,
           children: [
@@ -151,20 +158,34 @@ class _CurvedActionsBar extends StatelessWidget {
               ),
             ),
 
-            // Acciones laterales
+            // Acciones laterales (ahora 3 botones)
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _ActionBubble(
-                    icon: Icons.history,
-                    label: 'Historial\nde prestamos',
-                    surface: surface,
-                    onSurface: onSurface,
-                    textColor: onPrimary,
-                    onTap: onHistory,
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ActionBubble(
+                        icon: Icons.history,
+                        label: 'Historial\nde prestamos',
+                        surface: surface,
+                        onSurface: onSurface,
+                        textColor: onPrimary,
+                        onTap: onHistory,
+                      ),
+                      const SizedBox(height: 16),
+                      _ActionBubble(
+                        icon: Icons.list_alt,
+                        label: 'Ver lista de\nmateriales',
+                        surface: surface,
+                        onSurface: onSurface,
+                        textColor: onPrimary,
+                        onTap: onMaterialsList,
+                      ),
+                    ],
                   ),
                   _ActionBubble(
                     icon: Icons.insert_drive_file_outlined,
@@ -239,8 +260,8 @@ class _ArcPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
     final path = Path()
-      ..moveTo(0, 60)                                    // altura del borde
-      ..quadraticBezierTo(size.width / 2, -80, size.width, 60) // cresta central
+      ..moveTo(0, 60)
+      ..quadraticBezierTo(size.width / 2, -80, size.width, 60)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();

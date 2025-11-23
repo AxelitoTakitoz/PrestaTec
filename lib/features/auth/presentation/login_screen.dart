@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:prestatec01/app/auth_service.dart';
-import '../../../app/routes.dart';
 import 'pantalla_de_registro.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,7 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
 
-  final _authService = AuthService();
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -40,13 +39,12 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.signIn(email, password);
 
-      // ✅ OJO: YA NO NAVEGAMOS AQUÍ.
-      // RoleGateScreen detecta la sesión y te manda a Admin o Usuario.
+      // ✅ NO navegamos aquí.
+      // RoleGateScreen detecta que ya hay sesión y decide Admin/User.
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sesión iniciada')),
       );
-
     } on FirebaseAuthException catch (e) {
       String mensaje;
       switch (e.code) {
@@ -61,7 +59,8 @@ class _LoginScreenState extends State<LoginScreen> {
           mensaje = 'Esta cuenta ha sido deshabilitada.';
           break;
         case 'too-many-requests':
-          mensaje = 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+          mensaje =
+          'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
           break;
         default:
           mensaje = 'No se pudo iniciar sesión. Inténtalo más tarde.';
@@ -152,7 +151,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Función en desarrollo: Recuperar contraseña'),
+                                  content: Text(
+                                      'Función en desarrollo: Recuperar contraseña'),
                                 ),
                               );
                             },
@@ -165,7 +165,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(
                               child: ElevatedButton(
                                 onPressed: () async {
-                                  if (_formKey.currentState?.validate() ?? false) {
+                                  if (_formKey.currentState?.validate() ??
+                                      false) {
                                     await _signIn();
                                   }
                                 },
