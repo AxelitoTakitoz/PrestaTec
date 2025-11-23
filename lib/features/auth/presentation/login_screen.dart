@@ -1,8 +1,9 @@
 // lib/features/auth/presentation/login_screen.dart
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ← Firebase Auth
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:prestatec01/app/auth_service.dart';
 import '../../../app/routes.dart';
-import 'pantalla_de_registro.dart'; // Asegúrate que el nombre coincida con tu archivo
+import 'pantalla_de_registro.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +17,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
 
+  final _authService = AuthService();
+
   @override
   void dispose() {
     _email.dispose();
@@ -23,7 +26,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  /// Inicia sesión con Firebase Auth
   Future<void> _signIn() async {
     final email = _email.text.trim();
     final password = _pass.text.trim();
@@ -36,15 +38,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      // ✅ Autenticación real con Firebase
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      await _authService.signIn(email, password);
 
-      // 🎉 Login exitoso → redirigir
-      // Por ahora todos van a userHome (puedes ajustar según rol más adelante)
-      Navigator.pushReplacementNamed(context, AppRoutes.userHome);
+      // ✅ OJO: YA NO NAVEGAMOS AQUÍ.
+      // RoleGateScreen detecta la sesión y te manda a Admin o Usuario.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sesión iniciada')),
+      );
 
     } on FirebaseAuthException catch (e) {
       String mensaje;
@@ -65,10 +66,12 @@ class _LoginScreenState extends State<LoginScreen> {
         default:
           mensaje = 'No se pudo iniciar sesión. Inténtalo más tarde.';
       }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error inesperado: ${e.toString()}'),
@@ -95,8 +98,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'PrestaTec',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -129,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (v) =>
-                              (v == null || v.isEmpty) ? 'Campo requerido' : null,
+                          (v == null || v.isEmpty) ? 'Campo requerido' : null,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
@@ -140,18 +143,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (v) =>
-                              (v == null || v.isEmpty) ? 'Campo requerido' : null,
+                          (v == null || v.isEmpty) ? 'Campo requerido' : null,
                         ),
                         const SizedBox(height: 8),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: TextButton(
                             onPressed: () {
-                              // Opcional: agregar recuperación de contraseña
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text(
-                                      'Función en desarrollo: Recuperar contraseña'),
+                                  content: Text('Función en desarrollo: Recuperar contraseña'),
                                 ),
                               );
                             },
@@ -177,7 +178,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 onPressed: () {
                                   Navigator.push(
                                     context,
-                                    
                                     MaterialPageRoute(
                                       builder: (context) => RegistroScreen(),
                                     ),
