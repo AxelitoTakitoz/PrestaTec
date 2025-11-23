@@ -35,15 +35,21 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    // Verificacion temporal para entrar ala interfaz admin con mi correo
+    if (email == 'edu@itsuruapan.edu.mx' && password == '123456') {
+      // Redirigir directamente a la interfaz de administrador
+      Navigator.pushReplacementNamed(context, AppRoutes.adminHome);
+      return;
+    }
+
     try {
-      // ✅ Autenticación real con Firebase
+      //Autenticación normal con Firebase para otros usuarios
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // 🎉 Login exitoso → redirigir
-      // Por ahora todos van a userHome (puedes ajustar según rol más adelante)
+      // 🎉 Login exitoso → redirigir a interfaz de usuario normal
       Navigator.pushReplacementNamed(context, AppRoutes.userHome);
 
     } on FirebaseAuthException catch (e) {
