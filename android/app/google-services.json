@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "512547715504",
+    "project_id": "prestatec-5642b",
+    "storage_bucket": "prestatec-5642b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:512547715504:android:2ec2c67b8bcc454954fe75",
+        "android_client_info": {
+          "package_name": "com.prestatec.prestatec01"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCR7ZyPyyV2bYji-xMiJ5-JDj1hrJYaRcE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
