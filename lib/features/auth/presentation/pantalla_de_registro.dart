@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'dart:convert'; // <-- agregado para base64
 
 class RegistroScreen extends StatefulWidget {
   @override
@@ -18,6 +22,66 @@ class _RegistroScreenState extends State<RegistroScreen> {
 
   bool _aceptaTerminos = false;
   bool _isLoading = false;
+
+  // ---------------------------
+  // Función para generar PNG (bytes) del QR y devolver Base64
+  // ---------------------------
+  Future<String> _generarQrBase64(String data, {int size = 400}) async {
+    // Usamos QrPainter para crear la imagen
+    final painter = QrPainter(
+      data: data,
+      version: QrVersions.auto,
+      gapless: true,
+      color: const Color(0xFF000000),
+      emptyColor: const Color(0xFFFFFFFF),
+    );
+
+    // Convertir a ui.Image
+    final uiImage = await painter.toImage(size as double);
+    final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) throw Exception("No se pudo generar imagen QR");
+
+    final bytes = byteData.buffer.asUint8List();
+    final base64String = base64Encode(bytes);
+    return base64String;
+  }
+
+  // ---------------------------
+  // Método que muestra un diálogo con el QR (persistente hasta cerrar)
+  // ---------------------------
+  Future<void> _mostrarDialogQr(String qrBase64) async {
+    // Decodificamos la imagen base64 a bytes para mostrar
+    final bytes = base64Decode(qrBase64);
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // evita que se cierre tocando fuera
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('Código QR generado'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.memory(bytes, width: 250, height: 250),
+              SizedBox(height: 12),
+              Text(
+                'Escanea este QR para solicitar y devolver objetos. Guarda o captura la pantalla si lo deseas.',
+                style: TextStyle(fontSize: 13),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop(); // cierra el diálogo
+              },
+              child: Text('Cerrar y volver al inicio'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -242,82 +306,108 @@ class _RegistroScreenState extends State<RegistroScreen> {
                       onPressed: _isLoading
                           ? null
                           : () async {
-                              if (_formKey.currentState!.validate() && _aceptaTerminos) {
-                                setState(() => _isLoading = true);
+                        if (_formKey.currentState!.validate() && _aceptaTerminos) {
+                          setState(() => _isLoading = true);
 
-                                try {
-                                  // ✅ Paso 1: Registrar en Firebase Auth
-                                  final credential = await FirebaseAuth.instance
-                                      .createUserWithEmailAndPassword(
-                                    email: _correoController.text.trim(),
-                                    password: _contrasenaController.text,
-                                  );
+                          try {
+                            // ✅ Paso 1: Registrar en Firebase Auth
+                            final credential = await FirebaseAuth.instance
+                                .createUserWithEmailAndPassword(
+                              email: _correoController.text.trim(),
+                              password: _contrasenaController.text,
+                            );
 
-                                  // ✅ Paso 2: Guardar datos en Firestore
-                                  await FirebaseFirestore.instance
-                                      .collection('usuarios')
-                                      .doc(credential.user!.uid)
-                                      .set({
-                                    'nombre': _nombreController.text.trim(),
-                                    'apellidos': _apellidosController.text.trim(),
-                                    'numeroControl': _numeroControlController.text.trim(),
-                                    'correo': _correoController.text.trim(),
-                                    'rol': 'estudiante', // o 'docente', según tu lógica
-                                    'createdAt': FieldValue.serverTimestamp(),
-                                  });
+                            final uid = credential.user!.uid;
 
-                                  // ✅ Éxito
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('¡Registro exitoso! 🎉 Bienvenido a PrestaTec'),
-                                      backgroundColor: Color(0xFF6C8BD7),
-                                    ),
-                                  );
+                            // 🔸 Preparamos el payload que queremos almacenar en el QR
+                            final Map<String, dynamic> qrPayload = {
+                              'uid': uid,
+                              'nombre': _nombreController.text.trim(),
+                              'apellidos': _apellidosController.text.trim(),
+                              'numeroControl': _numeroControlController.text.trim(),
+                            };
 
-                                  // Opcional: esperar para que se vea el SnackBar
-                                  await Future.delayed(Duration(seconds: 1));
-                                  Navigator.pop(context); // Vuelve a login
+                            final String qrString = jsonEncode(qrPayload);
 
-                                } on FirebaseAuthException catch (e) {
-                                  String mensaje;
-                                  switch (e.code) {
-                                    case 'email-already-in-use':
-                                      mensaje = 'Este correo ya está registrado. ¿Olvidaste tu contraseña?';
-                                      break;
-                                    case 'invalid-email':
-                                      mensaje = 'El formato del correo no es válido.';
-                                      break;
-                                    case 'weak-password':
-                                      mensaje = 'La contraseña debe tener al menos 6 caracteres.';
-                                      break;
-                                    case 'operation-not-allowed':
-                                      mensaje = 'El registro está deshabilitado temporalmente.';
-                                      break;
-                                    default:
-                                      mensaje = 'No se pudo crear la cuenta. Inténtalo de nuevo.';
-                                  }
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
-                                  );
-                                } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error: ${e.toString()}'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                } finally {
-                                  setState(() => _isLoading = false);
-                                }
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Por favor, acepta los términos y completa todos los campos.'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
-                            },
+                            // ✅ Paso 2: Guardar datos en Firestore + qr
+                            await FirebaseFirestore.instance.collection('usuarios').doc(uid).set({
+                              'nombre': _nombreController.text.trim(),
+                              'apellidos': _apellidosController.text.trim(),
+                              'numeroControl': _numeroControlController.text.trim(),
+                              'correo': _correoController.text.trim(),
+                              'rol': 'estudiante', // o 'docente', según tu lógica
+                              'createdAt': FieldValue.serverTimestamp(),
+                              // Campo con contenido legible del QR (JSON)
+                              'qrData': qrString,
+                            }, SetOptions(merge: true));
+
+                            // 🔸 Generar imagen QR y guardarla como base64 (opcional, útil para mostrar rápido)
+                            try {
+                              final String qrBase64 = await _generarQrBase64(qrString);
+                              // Guardamos el base64 en Firestore en un campo separado
+                              await FirebaseFirestore.instance.collection('usuarios').doc(uid).update({
+                                'qrBase64': qrBase64,
+                              });
+
+                              // Mostrar diálogo con el QR (persistente hasta que el usuario lo cierre)
+                              await _mostrarDialogQr(qrBase64);
+                            } catch (qrErr) {
+                              // Si falla la generación/guardado del PNG, no bloqueamos el registro
+                              print('Error generando/guardando QR: $qrErr');
+                            }
+
+                            // ✅ Éxito
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('¡Registro exitoso! 🎉 Bienvenido a PrestaTec'),
+                                backgroundColor: Color(0xFF6C8BD7),
+                              ),
+                            );
+
+                            // Opcional: esperar para que se vea el SnackBar
+                            await Future.delayed(Duration(seconds: 1));
+                            Navigator.pop(context); // Vuelve a login (mantuvimos tu comportamiento)
+
+                          } on FirebaseAuthException catch (e) {
+                            String mensaje;
+                            switch (e.code) {
+                              case 'email-already-in-use':
+                                mensaje = 'Este correo ya está registrado. ¿Olvidaste tu contraseña?';
+                                break;
+                              case 'invalid-email':
+                                mensaje = 'El formato del correo no es válido.';
+                                break;
+                              case 'weak-password':
+                                mensaje = 'La contraseña debe tener al menos 6 caracteres.';
+                                break;
+                              case 'operation-not-allowed':
+                                mensaje = 'El registro está deshabilitado temporalmente.';
+                                break;
+                              default:
+                                mensaje = 'No se pudo crear la cuenta. Inténtalo de nuevo.';
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: ${e.toString()}'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          } finally {
+                            setState(() => _isLoading = false);
+                          }
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Por favor, acepta los términos y completa todos los campos.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Color(0xFF1A2540),
                         foregroundColor: Colors.white,
