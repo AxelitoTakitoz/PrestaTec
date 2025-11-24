@@ -1,4 +1,7 @@
+// lib/features/home/presentation/user_home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'historial_prestamos_usuario.dart';
 import 'solicitar_articulo.dart';
 import '../../../app/routes.dart';
@@ -6,32 +9,35 @@ import '../../../app/routes.dart';
 class UserHomeScreen extends StatelessWidget {
   const UserHomeScreen({super.key});
 
-  // Función para confirmar y cerrar sesión
-  void _confirmLogout(BuildContext context) {
-    showDialog(
+  Future<void> _confirmLogout(BuildContext context) async {
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Cerrar sesión'),
-          content: const Text('¿Está seguro de que deseas cerrar sesión?'),
+          content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(); // Cierra el diálogo
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(); // Cierra el diálogo
-                // Navega al login y elimina el historial
-                Navigator.of(context).pushReplacementNamed(AppRoutes.login);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Cerrar sesión'),
             ),
           ],
         );
       },
+    );
+
+    if (ok != true) return;
+
+    await FirebaseAuth.instance.signOut();
+    if (!context.mounted) return;
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.login,
+          (_) => false,
     );
   }
 
@@ -48,10 +54,10 @@ class UserHomeScreen extends StatelessWidget {
                 _confirmLogout(context);
               }
             },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+            itemBuilder: (context) => const [
               PopupMenuItem<String>(
                 value: 'logout',
-                child: const Text('Cerrar sesión'),
+                child: Text('Cerrar sesión'),
               ),
             ],
             icon: const Icon(Icons.more_horiz),
@@ -73,17 +79,13 @@ class UserHomeScreen extends StatelessWidget {
         onHistory: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => const HistorialPrestamosUsuarios(),
-            ),
+            MaterialPageRoute(builder: (_) => const HistorialPrestamosUsuarios()),
           );
         },
         onRequest: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => const SolicitarArticulo(),
-            ),
+            MaterialPageRoute(builder: (_) => const SolicitarArticulo()),
           );
         },
       ),

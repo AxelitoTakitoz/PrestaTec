@@ -1,8 +1,9 @@
 // lib/features/auth/presentation/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:prestatec01/app/auth_service.dart';
+import '../../../app/auth_service.dart';
 import 'pantalla_de_registro.dart';
+import 'role_gate_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,8 +16,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _pass = TextEditingController();
+  final _authService = AuthService();
 
-  final AuthService _authService = AuthService();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -26,24 +28,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signIn() async {
-    final email = _email.text.trim();
-    final password = _pass.text.trim();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor ingresa correo y contraseña')),
-      );
-      return;
-    }
+    setState(() => _loading = true);
 
     try {
-      await _authService.signIn(email, password);
+      await _authService.signIn(_email.text, _pass.text);
 
-      // ✅ NO navegamos aquí.
-      // RoleGateScreen detecta que ya hay sesión y decide Admin/User.
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sesión iniciada')),
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const RoleGateScreen()),
       );
     } on FirebaseAuthException catch (e) {
       String mensaje;
@@ -59,11 +53,10 @@ class _LoginScreenState extends State<LoginScreen> {
           mensaje = 'Esta cuenta ha sido deshabilitada.';
           break;
         case 'too-many-requests':
-          mensaje =
-          'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+          mensaje = 'Demasiados intentos. Intenta más tarde.';
           break;
         default:
-          mensaje = 'No se pudo iniciar sesión. Inténtalo más tarde.';
+          mensaje = 'No se pudo iniciar sesión.';
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -73,16 +66,19 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error inesperado: ${e.toString()}'),
+          content: Text('Error inesperado: $e'),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -101,16 +97,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'Bienvenido',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text('Bienvenido', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 16),
+
                   CircleAvatar(
                     radius: 36,
                     backgroundColor: cs.primary.withOpacity(0.1),
                     child: Icon(Icons.person, color: cs.primary, size: 36),
                   ),
+
                   const SizedBox(height: 20),
                   Text(
                     'Ingresa tu correo institucional y contraseña',
@@ -118,6 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
+
                   Form(
                     key: _formKey,
                     child: Column(
@@ -131,9 +127,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Campo requerido' : null,
+                          (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
                         ),
                         const SizedBox(height: 12),
+
                         TextFormField(
                           controller: _pass,
                           obscureText: true,
@@ -142,35 +139,35 @@ class _LoginScreenState extends State<LoginScreen> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Campo requerido' : null,
+                          (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
                         ),
+
                         const SizedBox(height: 8),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: TextButton(
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Función en desarrollo: Recuperar contraseña'),
-                                ),
+                                const SnackBar(content: Text('Recuperación pendiente')),
                               );
                             },
                             child: const Text('¿Olvidaste tu contraseña?'),
                           ),
                         ),
+
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () async {
-                                  if (_formKey.currentState?.validate() ??
-                                      false) {
-                                    await _signIn();
-                                  }
-                                },
-                                child: const Text('Iniciar sesión'),
+                                onPressed: _loading ? null : _signIn,
+                                child: _loading
+                                    ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                                    : const Text('Iniciar sesión'),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -179,9 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 onPressed: () {
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (context) => RegistroScreen(),
-                                    ),
+                                    MaterialPageRoute(builder: (_) => RegistroScreen()),
                                   );
                                 },
                                 child: const Text('Registrarse'),

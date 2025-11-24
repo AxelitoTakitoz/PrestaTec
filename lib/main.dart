@@ -1,17 +1,15 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-
 import 'firebase_options.dart';
-import 'features/auth/presentation/role_gate_screen.dart';
+import 'app/routes.dart';
+import 'app/theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
   runApp(const PrestaTecApp());
 }
 
@@ -23,8 +21,9 @@ class PrestaTecApp extends StatelessWidget {
     return MaterialApp(
       title: 'PrestaTec',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true),
-      home: const RoleGateScreen(),
+      theme: AppTheme.lightTheme,
+      initialRoute: AppRoutes.roleGate,
+      onGenerateRoute: AppRoutes.generateRoute,
     );
   }
 }

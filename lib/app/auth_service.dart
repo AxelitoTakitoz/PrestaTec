@@ -6,6 +6,8 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
+
   Future<UserCredential> signIn(String email, String password) {
     return _auth.signInWithEmailAndPassword(
       email: email.trim(),
@@ -13,45 +15,32 @@ class AuthService {
     );
   }
 
-  Future<UserCredential> signUp(String email, String password) {
+  Future<UserCredential> register(String email, String password) {
     return _auth.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password.trim(),
     );
   }
 
-  /// ✅ Devuelve true si el usuario actual es admin.
-  /// 1) admins/{correoLower} existe
-  /// 2) o hay algún doc en admins con campo email = correoLower
-  Future<bool> isAdmin() async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
+  Future<void> signOut() => _auth.signOut();
 
-    final rawEmail = user.email?.trim();
-    if (rawEmail == null || rawEmail.isEmpty) return false;
+  Future<bool> isAdminEmail(String email) async {
+    final clean = email.trim().toLowerCase();
+    if (clean.isEmpty) return false;
 
-    final emailLower = rawEmail.toLowerCase();
+    try {
+      final doc = await _db.collection('admins').doc(clean).get();
+      return doc.exists;
+    } catch (_) {
+      // Si reglas están mal o no hay permiso, NO truenes la app.
+      return false;
+    }
+  }
 
-    final admins = _db.collection('admins');
-
-    // 1) Intentar por docId normalizado
-    final doc = await admins.doc(emailLower).get();
-    // DEBUG
-    // ignore: avoid_print
-    print("DEBUG isAdmin -> docId=$emailLower exists=${doc.exists}");
-    if (doc.exists) return true;
-
-    // 2) Intentar por campo "email"
-    final q = await admins
-        .where('email', isEqualTo: emailLower)
-        .limit(1)
-        .get();
-
-    final ok = q.docs.isNotEmpty;
-    // DEBUG
-    // ignore: avoid_print
-    print("DEBUG isAdmin -> query email=$emailLower -> $ok");
-
-    return ok;
+  Future<bool> currentUserIsAdmin() async {
+    final u = _auth.currentUser;
+    final em = u?.email;
+    if (em == null) return false;
+    return isAdminEmail(em);
   }
 }
