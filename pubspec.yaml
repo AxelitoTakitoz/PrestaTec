@@ -19,7 +19,9 @@ dependencies:
   firebase_core: ^4.2.1
   firebase_auth: ^6.1.2
   cloud_firestore: ^6.1.0
-
+  image: ^4.0.17  # o la última versión
+  qr: ^3.0.1
+  barcode_widget: ^2.0.4
 dev_dependencies:
   flutter_test:
     sdk: flutter
