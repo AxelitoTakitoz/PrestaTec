@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'historial_prestamos_usuario.dart';
 import 'solicitar_articulo.dart';
+import 'ver_perfil_usuario.dart';
 import '../../../app/routes.dart';
 
 class UserHomeScreen extends StatelessWidget {
@@ -41,6 +42,15 @@ class UserHomeScreen extends StatelessWidget {
     );
   }
 
+  void _navigateToProfile(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const UserProfileScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -50,14 +60,33 @@ class UserHomeScreen extends StatelessWidget {
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'logout') {
+              if (value == 'profile') {
+                _navigateToProfile(context);
+              } else if (value == 'logout') {
                 _confirmLogout(context);
               }
             },
             itemBuilder: (context) => const [
               PopupMenuItem<String>(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.person, size: 20),
+                    SizedBox(width: 12),
+                    Text('Ver perfil'),
+                  ],
+                ),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem<String>(
                 value: 'logout',
-                child: Text('Cerrar sesión'),
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, size: 20),
+                    SizedBox(width: 12),
+                    Text('Cerrar sesión'),
+                  ],
+                ),
               ),
             ],
             icon: const Icon(Icons.more_horiz),

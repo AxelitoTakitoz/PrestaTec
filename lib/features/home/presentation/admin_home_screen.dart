@@ -1,7 +1,5 @@
-// lib/features/home/presentation/admin_home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import '../../../app/routes.dart';
 import '../../admin/presentation/historial_prestamos_admin.dart';
 import '../../admin/presentation/generar_reporte_admin.dart';
@@ -10,35 +8,31 @@ import '../../admin/presentation/materials_list_screen.dart';
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
 
-  Future<void> _confirmLogout(BuildContext context) async {
-    final ok = await showDialog<bool>(
+  // Función para confirmar y cerrar sesión
+  void _confirmLogout(BuildContext context) {
+    showDialog(
       context: context,
-      builder: (dialogContext) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Cerrar sesión'),
           content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
               child: const Text('Cancelar'),
             ),
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+              },
               child: const Text('Cerrar sesión'),
             ),
           ],
         );
       },
-    );
-
-    if (ok != true) return;
-
-    await FirebaseAuth.instance.signOut();
-    if (!context.mounted) return;
-
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.login,
-          (_) => false,
     );
   }
 
@@ -55,8 +49,8 @@ class AdminHomeScreen extends StatelessWidget {
                 _confirmLogout(context);
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem<String>(
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
                 value: 'logout',
                 child: Text('Cerrar sesión'),
               ),
@@ -77,21 +71,20 @@ class AdminHomeScreen extends StatelessWidget {
         surface: cs.surface,
         onSurface: cs.onSurface,
         onPrimary: cs.onPrimary,
-        onRegister: () =>
-            Navigator.of(context).pushNamed(AppRoutes.registerItem),
+        onRegister: () => Navigator.of(context).pushNamed(AppRoutes.registerItem),
         onHistory: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => const AdminHistorialPrestamosScreen(),
+            builder: (context) => const AdminHistorialPrestamosScreen(),
           ),
         ),
         onReport: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => const GenerarReporteAdmin(),
+            builder: (context) => const GenerarReporteAdmin(),
           ),
         ),
         onMaterialsList: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => const MaterialsListScreen(),
+            builder: (context) => const MaterialsListScreen(),
           ),
         ),
       ),
@@ -125,11 +118,14 @@ class _CurvedActionsBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: SizedBox(
-        height: 240,
+        height: 240, // Aumentado para acomodar 3 botones
         child: Stack(
           alignment: Alignment.bottomCenter,
           children: [
+            // Fondo curvo
             Positioned.fill(child: CustomPaint(painter: _ArcPainter(color: primary))),
+
+            // Burbuja central + texto
             Positioned(
               top: 18,
               child: Column(
@@ -162,6 +158,8 @@ class _CurvedActionsBar extends StatelessWidget {
                 ],
               ),
             ),
+
+            // Acciones laterales (ahora 3 botones)
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
               child: Row(
@@ -254,6 +252,7 @@ class _ActionBubble extends StatelessWidget {
   }
 }
 
+/// Dibuja la "semicircunferencia" del fondo
 class _ArcPainter extends CustomPainter {
   final Color color;
   _ArcPainter({required this.color});
