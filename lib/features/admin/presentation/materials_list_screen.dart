@@ -241,7 +241,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
               if (material.modelo.isNotEmpty)
                 _buildInfoRow('Modelo', material.modelo),
               _buildInfoRow('Ubicación', material.ubicacion),
-              _buildInfoRow('Cantidad', material.cantidad),
+              _buildInfoRow('Cantidad', material.cantidad.toString()), // ✅ Convertir int a String
               const SizedBox(height: 8),
               Text(
                 'Registrado: ${_formatDate(material.fechaRegistro)}',

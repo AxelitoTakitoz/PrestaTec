@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../app/routes.dart';
 import '../../admin/presentation/historial_prestamos_admin.dart';
 import '../../admin/presentation/generar_reporte_admin.dart';
@@ -12,6 +13,24 @@ import '../../admin/presentation/admin_confirm_prestamo_screen.dart';
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
 
+  // FORMATEAR TIMESTAMP A FECHA/HORA
+  String _formatTimestamp(dynamic ts) {
+    if (ts == null) return "No disponible";
+
+    if (ts is Timestamp) {
+      final d = ts.toDate();
+      final fecha =
+          "${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}";
+      final hora =
+          "${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}";
+
+      return "$fecha  |  $hora";
+    }
+
+    return ts.toString();
+  }
+
+  // LOGOUT
   Future<void> _confirmLogout(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -36,6 +55,7 @@ class AdminHomeScreen extends StatelessWidget {
     if (confirm == true) {
       await FirebaseAuth.instance.signOut();
       if (!context.mounted) return;
+
       Navigator.of(context).pushNamedAndRemoveUntil(
         AppRoutes.login,
             (_) => false,
@@ -46,22 +66,17 @@ class AdminHomeScreen extends StatelessWidget {
   void _navigateToProfile(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const VerPerfilAdmin(),
-      ),
+      MaterialPageRoute(builder: (context) => const VerPerfilAdmin()),
     );
   }
 
   void _navigateToScanQr(BuildContext context) async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
-      MaterialPageRoute(
-        builder: (context) => const AdminScanQrScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const AdminScanQrScreen()),
     );
 
     if (result != null && context.mounted) {
-      // Ir a pantalla de confirmación del préstamo
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -114,50 +129,102 @@ class AdminHomeScreen extends StatelessWidget {
         ],
       ),
 
-      /* Pantalla inicial cuando no haya préstamos */
-      body: const Padding(
-        padding: EdgeInsets.all(16),
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Text('Sin prestamos activos'),
+      // -------------------------------
+      // LISTA DE PRÉSTAMOS ACTIVOS
+      // -------------------------------
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('prestamos')
+              .where('estado', isEqualTo: 'activo')
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Text("Cargando préstamos...");
+            }
+
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Align(
+                alignment: Alignment.topLeft,
+                child: Text(
+                  "Sin préstamos activos",
+                  style: TextStyle(fontSize: 18),
+                ),
+              );
+            }
+
+            final prestamos = snapshot.data!.docs;
+
+            return ListView.builder(
+              itemCount: prestamos.length,
+              itemBuilder: (context, index) {
+                final p = prestamos[index].data() as Map<String, dynamic>;
+
+                // 🔥 CORREGIDO AQUÍ 🔥
+                final nombre = p["nombreCompleto"] ?? "Desconocido";
+                final tipo = p["rol"] ?? "N/A";
+                final articulo = p["materialDescripcion"] ?? "N/A";
+                final fecha = _formatTimestamp(p["fechaPrestamo"]);
+
+                return Card(
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  child: ListTile(
+                    leading: const Icon(Icons.person, size: 32),
+                    title: Text(
+                      nombre,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Tipo: $tipo"),
+                        Text("Artículo: $articulo"),
+                        Text("Fecha y hora: $fecha"),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         ),
       ),
 
-      /* Barra inferior de accesos */
       bottomNavigationBar: _CurvedActionsBar(
         primary: cs.primary,
         surface: cs.surface,
         onSurface: cs.onSurface,
         onPrimary: cs.onPrimary,
         onScanQr: () => _navigateToScanQr(context),
-        onRegister: () =>
-            Navigator.of(context).pushNamed(AppRoutes.registerItem),
-        onHistory: () => Navigator.of(context).push(
+        onRegister: () => Navigator.of(context).pushNamed(AppRoutes.registerItem),
+        onHistory: () => Navigator.push(
+          context,
           MaterialPageRoute(
-            builder: (context) => const AdminHistorialPrestamosScreen(),
-          ),
+              builder: (context) => const AdminHistorialPrestamosScreen()),
         ),
-        onReport: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const GenerarReporteAdmin(),
-          ),
+        onReport: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const GenerarReporteAdmin()),
         ),
-        onMaterialsList: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const MaterialsListScreen(),
-          ),
+        onMaterialsList: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const MaterialsListScreen()),
         ),
-        onPrestamosList: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const PrestamosListScreen(),
-          ),
+        onPrestamosList: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PrestamosListScreen()),
         ),
       ),
     );
   }
 }
 
-/* Widget de la barra inferior curva */
 class _CurvedActionsBar extends StatelessWidget {
   final Color primary;
   final Color surface;
@@ -193,12 +260,9 @@ class _CurvedActionsBar extends StatelessWidget {
           alignment: Alignment.bottomCenter,
           children: [
             Positioned.fill(
-              child: CustomPaint(
-                painter: _ArcPainter(color: primary),
-              ),
+              child: CustomPaint(painter: _ArcPainter(color: primary)),
             ),
 
-            // Botón central: Escanear QR
             Positioned(
               top: 18,
               child: Column(
@@ -213,11 +277,8 @@ class _CurvedActionsBar extends StatelessWidget {
                       onTap: onScanQr,
                       child: Padding(
                         padding: const EdgeInsets.all(22),
-                        child: Icon(
-                          Icons.qr_code_scanner,
-                          size: 44,
-                          color: onSurface,
-                        ),
+                        child: Icon(Icons.qr_code_scanner,
+                            size: 44, color: onSurface),
                       ),
                     ),
                   ),
@@ -242,7 +303,6 @@ class _CurvedActionsBar extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Columna izquierda
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -266,7 +326,6 @@ class _CurvedActionsBar extends StatelessWidget {
                     ],
                   ),
 
-                  // Columna derecha
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -299,7 +358,6 @@ class _CurvedActionsBar extends StatelessWidget {
   }
 }
 
-/* Burbujas circulares de acciones */
 class _ActionBubble extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -346,9 +404,9 @@ class _ActionBubble extends StatelessWidget {
   }
 }
 
-/* Pintor de la curva inferior */
 class _ArcPainter extends CustomPainter {
   final Color color;
+
   _ArcPainter({required this.color});
 
   @override

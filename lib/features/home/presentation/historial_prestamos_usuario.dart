@@ -1,21 +1,36 @@
 // lib/app/features/home/presentation/historial_prestamos_usuarios.dart
 
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HistorialPrestamosUsuarios extends StatefulWidget {
   const HistorialPrestamosUsuarios({super.key});
 
   @override
-  State<HistorialPrestamosUsuarios> createState() => _HistorialPrestamosUsuariosState();
+  State<HistorialPrestamosUsuarios> createState() =>
+      _HistorialPrestamosUsuariosState();
 }
 
-class _HistorialPrestamosUsuariosState extends State<HistorialPrestamosUsuarios> {
-  String _filter = 'todos'; // Por defecto: mostrar todos
-  bool _hasLoans = false; // Cambia a true cuando haya datos reales
+class _HistorialPrestamosUsuariosState
+    extends State<HistorialPrestamosUsuarios> {
+  String _filter = 'todos';
+
+  // ------------------------------------------------------------
+  // 🔥 Función para formatear el Timestamp de Firestore
+  // ------------------------------------------------------------
+  String formatearFecha(Timestamp timestamp) {
+    final DateTime fecha = timestamp.toDate();
+    return "${fecha.day.toString().padLeft(2, '0')}/"
+        "${fecha.month.toString().padLeft(2, '0')}/"
+        "${fecha.year} "
+        "${fecha.hour.toString().padLeft(2, '0')}:"
+        "${fecha.minute.toString().padLeft(2, '0')}";
+  }
 
   @override
   Widget build(BuildContext context) {
-    // ... (AppBar con PopupMenuButton como arriba)
+    final User? user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F1D3E),
@@ -28,29 +43,13 @@ class _HistorialPrestamosUsuariosState extends State<HistorialPrestamosUsuarios>
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
-            onSelected: (value) {
-              setState(() {
-                _filter = value;
-              });
-            },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              PopupMenuItem<String>(
-                value: 'todos',
-                child: Text(_filter == 'todos' ? '✓ Mostrar todos' : 'Mostrar todos'),
-              ),
+            onSelected: (value) => setState(() => _filter = value),
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'todos', child: Text("Mostrar todos")),
               const PopupMenuDivider(),
-              PopupMenuItem<String>(
-                value: 'activos',
-                child: Text(_filter == 'activos' ? '✓ Activos' : 'Activos'),
-              ),
-              PopupMenuItem<String>(
-                value: 'vencidos',
-                child: Text(_filter == 'vencidos' ? '✓ Vencidos' : 'Vencidos'),
-              ),
-              PopupMenuItem<String>(
-                value: 'devueltos',
-                child: Text(_filter == 'devueltos' ? '✓ Devueltos' : 'Devueltos'),
-              ),
+              const PopupMenuItem(value: 'activos', child: Text("Activos")),
+              const PopupMenuItem(value: 'vencidos', child: Text("Vencidos")),
+              const PopupMenuItem(value: 'devueltos', child: Text("Devueltos")),
             ],
           ),
         ],
@@ -61,7 +60,7 @@ class _HistorialPrestamosUsuariosState extends State<HistorialPrestamosUsuarios>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Historial de préstamos',
                 style: TextStyle(
                   fontSize: 28,
@@ -71,72 +70,118 @@ class _HistorialPrestamosUsuariosState extends State<HistorialPrestamosUsuarios>
               ),
               const SizedBox(height: 8),
               Text(
-                'Filtrado por: ${_filter == 'todos' ? 'Todos' : _filter == 'activos' ? 'Activos' : _filter == 'vencidos' ? 'Vencidos' : 'Devueltos'}',
+                'Filtrado: $_filter',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.white.withOpacity(0.8),
                 ),
               ),
               const SizedBox(height: 32),
+
               Expanded(
-                child: Center(
-                  child: _hasLoans
-                      ? ListView.builder(
-                    itemCount: 5,
-                    itemBuilder: (context, index) {
-                      // Simulación de estado según filtro
-                      String estado;
-                      IconData icono;
-                      Color colorIcono;
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('prestamos')
+                      .where('correo', isEqualTo: user?.email ?? "")
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      );
+                    }
 
-                      if (_filter == 'todos') {
-                        estado = index % 3 == 0 ? 'Activo' : index % 3 == 1 ? 'Vencido' : 'Devuelto';
-                      } else {
-                        estado = _filter == 'activos' ? 'Activo' : _filter == 'vencidos' ? 'Vencido' : 'Devuelto';
-                      }
-
-                      if (estado == 'Activo') {
-                        icono = Icons.check_circle_outline;
-                        colorIcono = Colors.green;
-                      } else if (estado == 'Vencido') {
-                        icono = Icons.warning_amber_outlined;
-                        colorIcono = Colors.orange;
-                      } else {
-                        icono = Icons.done_all;
-                        colorIcono = Colors.blue;
-                      }
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        color: const Color(0xFF1A2540).withOpacity(0.8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ListTile(
-                          title: Text(
-                            'Préstamo #${index + 1}',
-                            style: const TextStyle(color: Colors.white),
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          "Aún no se han hecho préstamos",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 18,
+                            fontStyle: FontStyle.italic,
                           ),
-                          subtitle: Text(
-                            'Fecha: 2025-06-15 | Estado: $estado',
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                          trailing: Icon(icono, color: colorIcono),
                         ),
                       );
-                    },
-                  )
-                      : Text(
-                    'Aún no se han hecho préstamos',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white70,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                    }
+
+                    final prestamos = snapshot.data!.docs.where((doc) {
+                      String estado = doc['estado'] ?? "";
+
+                      switch (_filter) {
+                        case 'activos':
+                          return estado == 'activo';
+                        case 'vencidos':
+                          return estado == 'vencido';
+                        case 'devueltos':
+                          return estado == 'devuelto';
+                        default:
+                          return true;
+                      }
+                    }).toList();
+
+                    if (prestamos.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          "No hay datos con este filtro.",
+                          style: TextStyle(color: Colors.white70, fontSize: 18),
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      itemCount: prestamos.length,
+                      itemBuilder: (context, index) {
+                        final p = prestamos[index];
+                        String estado = p['estado'] ?? "desconocido";
+
+                        // ----------------------------
+                        // ICONOS POR ESTADO
+                        // ----------------------------
+                        IconData icono;
+                        Color colorIcono;
+
+                        if (estado == 'activo') {
+                          icono = Icons.check_circle_outline;
+                          colorIcono = Colors.green;
+                        } else if (estado == 'vencido') {
+                          icono = Icons.warning_amber_outlined;
+                          colorIcono = Colors.orange;
+                        } else {
+                          icono = Icons.done_all;
+                          colorIcono = Colors.blue;
+                        }
+
+                        // ----------------------------
+                        // FORMATEO DE FECHA
+                        // ----------------------------
+                        final fechaRaw = p['fechaPrestamo'];
+                        final fechaFormateada =
+                        fechaRaw is Timestamp ? formatearFecha(fechaRaw) : "-";
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          color: const Color(0xFF1A2540).withOpacity(0.8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            title: Text(
+                              p['materialDescripcion'] ?? "Material",
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              "Prestado: $fechaFormateada\n"
+                                  "Estado: $estado",
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                            trailing: Icon(icono, color: colorIcono),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
-              ),
+              )
             ],
           ),
         ),

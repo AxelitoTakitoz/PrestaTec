@@ -1,11 +1,13 @@
 // lib/features/home/presentation/user_home_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../app/routes.dart';
 
 import 'historial_prestamos_usuario.dart';
 import 'solicitar_articulo.dart';
 import 'ver_perfil_usuario.dart';
-import '../../../app/routes.dart';
 
 class UserHomeScreen extends StatelessWidget {
   const UserHomeScreen({super.key});
@@ -45,15 +47,30 @@ class UserHomeScreen extends StatelessWidget {
   void _navigateToProfile(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const UserProfileScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const UserProfileScreen()),
     );
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return "No disponible";
+
+    if (timestamp is Timestamp) {
+      final date = timestamp.toDate();
+      return "${date.day.toString().padLeft(2,'0')}/"
+          "${date.month.toString().padLeft(2,'0')}/"
+          "${date.year}  "
+          "${date.hour.toString().padLeft(2,'0')}:"
+          "${date.minute.toString().padLeft(2,'0')}";
+    }
+
+    return timestamp.toString();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final User? user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Interfaz del usuario'),
@@ -93,13 +110,77 @@ class UserHomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: const Padding(
-        padding: EdgeInsets.all(16),
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Text('Sin prestamos activos'),
+
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('prestamos')
+              .where('correo', isEqualTo: user?.email ?? "")
+              .where('estado', isEqualTo: 'activo')
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Align(
+                alignment: Alignment.topLeft,
+                child: Text(
+                  'Sin préstamos activos',
+                  style: TextStyle(fontSize: 18),
+                ),
+              );
+            }
+
+            final p = snapshot.data!.docs.first;
+            final fecha = _formatTimestamp(p["fechaPrestamo"]);
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE9EEF8),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Préstamo activo',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Text(
+                    'Artículo: ${p["materialDescripcion"]}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+
+                  Text(
+                    'Fecha de préstamo: $fecha',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: const [
+                      Icon(Icons.check_circle, color: Colors.green),
+                      SizedBox(width: 6),
+                      Text('Estado: Activo'),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
+
       bottomNavigationBar: _CurvedActionsBarUser(
         primary: cs.primary,
         surface: cs.surface,
@@ -148,7 +229,10 @@ class _CurvedActionsBarUser extends StatelessWidget {
         child: Stack(
           alignment: Alignment.bottomCenter,
           children: [
-            Positioned.fill(child: CustomPaint(painter: _ArcPainter(color: primary))),
+            Positioned.fill(
+              child: CustomPaint(painter: _ArcPainter(color: primary)),
+            ),
+
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
               child: Row(
@@ -157,15 +241,16 @@ class _CurvedActionsBarUser extends StatelessWidget {
                 children: [
                   _ActionBubble(
                     icon: Icons.history,
-                    label: 'Historial\nde prestamos',
+                    label: 'Historial\nde préstamos',
                     surface: surface,
                     onSurface: onSurface,
                     textColor: onPrimary,
                     onTap: onHistory,
                   ),
+
                   _ActionBubble(
                     icon: Icons.add_shopping_cart_outlined,
-                    label: 'Solicitar\narticulo',
+                    label: 'Solicitar\nartículo',
                     surface: surface,
                     onSurface: onSurface,
                     textColor: onPrimary,
@@ -229,17 +314,20 @@ class _ActionBubble extends StatelessWidget {
 
 class _ArcPainter extends CustomPainter {
   final Color color;
+
   _ArcPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
+
     final path = Path()
       ..moveTo(0, 50)
       ..quadraticBezierTo(size.width / 2, -60, size.width, 50)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
+
     canvas.drawPath(path, paint);
   }
 

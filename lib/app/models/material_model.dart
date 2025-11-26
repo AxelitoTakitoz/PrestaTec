@@ -3,8 +3,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MaterialModel {
-  final String numId; // Campo "# Num" - ID único
-  final String cantidad;
+  final String numId;
+  final int cantidad; // <-- ENTERO REAL
   final String descripcion;
   final String marca;
   final String modelo;
@@ -37,7 +37,7 @@ class MaterialModel {
   Map<String, dynamic> toMap() {
     return {
       'numId': numId,
-      'cantidad': cantidad,
+      'cantidad': cantidad, // <-- entero
       'descripcion': descripcion,
       'marca': marca,
       'modelo': modelo,
@@ -57,28 +57,35 @@ class MaterialModel {
   // Crear desde Map de Firebase
   factory MaterialModel.fromMap(Map<String, dynamic> map) {
     return MaterialModel(
-      numId: map['numId'] ?? '',
-      cantidad: map['cantidad'] ?? '',
-      descripcion: map['descripcion'] ?? '',
-      marca: map['marca'] ?? '',
-      modelo: map['modelo'] ?? '',
-      ubicacion: map['ubicacion'] ?? '',
-      carreraDepto: map['carreraDepto'] ?? '',
-      clasificacion: map['clasificacion'] ?? '',
-      tipoBien: map['tipoBien'] ?? '',
-      consecutivo: map['consecutivo'] ?? '',
+      numId: map['numId']?.toString() ?? '',
+      cantidad: _parseCantidad(map['cantidad']),
+      descripcion: map['descripcion']?.toString() ?? '',
+      marca: map['marca']?.toString() ?? '',
+      modelo: map['modelo']?.toString() ?? '',
+      ubicacion: map['ubicacion']?.toString() ?? '',
+      carreraDepto: map['carreraDepto']?.toString() ?? '',
+      clasificacion: map['clasificacion']?.toString() ?? '',
+      tipoBien: map['tipoBien']?.toString() ?? '',
+      consecutivo: map['consecutivo']?.toString() ?? '',
       fechaRegistro: (map['fechaRegistro'] as Timestamp).toDate(),
       fechaModificacion: map['fechaModificacion'] != null
           ? (map['fechaModificacion'] as Timestamp).toDate()
           : null,
-      modificadoPor: map['modificadoPor'],
+      modificadoPor: map['modificadoPor']?.toString(),
     );
+  }
+
+  // Función segura para convertir cantidad
+  static int _parseCantidad(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   // Crear copia con modificaciones
   MaterialModel copyWith({
     String? numId,
-    String? cantidad,
+    int? cantidad,
     String? descripcion,
     String? marca,
     String? modelo,

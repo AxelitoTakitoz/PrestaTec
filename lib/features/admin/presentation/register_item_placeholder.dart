@@ -102,10 +102,14 @@ class _RegisterItemPlaceholderState extends State<RegisterItemPlaceholder> {
     setState(() => _isLoading = true);
 
     try {
+      // 🔧 CORRECCIÓN: Convertir cantidad a int
+      final cantidadText = row['Cantidad'].text.trim();
+      final cantidad = int.tryParse(cantidadText) ?? 0;
+
       // Crear modelo
       final material = MaterialModel(
         numId: '', // Se generará automáticamente
-        cantidad: row['Cantidad'].text.trim(),
+        cantidad: cantidad, // ✅ Ahora es int
         descripcion: row['Descripción'].text.trim(),
         marca: row['Marca'].text.trim(),
         modelo: row['Modelo'].text.trim(),
@@ -311,7 +315,7 @@ class _RegisterItemPlaceholderState extends State<RegisterItemPlaceholder> {
                   ? Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
-                  item[col],
+                  item[col].toString(), // ✅ Convertir a String para mostrar
                   style: const TextStyle(color: Colors.white),
                 ),
               )

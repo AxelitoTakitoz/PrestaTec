@@ -87,7 +87,10 @@ class _EditMaterialScreenState extends State<EditMaterialScreen> {
 
       setState(() {
         _originalMaterial = material;
-        _cantidadController.text = material.cantidad;
+
+        // 🔥 CORREGIDO: cantidad es int → convertir a string
+        _cantidadController.text = material.cantidad.toString();
+
         _descripcionController.text = material.descripcion;
         _marcaController.text = material.marca;
         _modeloController.text = material.modelo;
@@ -96,6 +99,7 @@ class _EditMaterialScreenState extends State<EditMaterialScreen> {
         _clasificacionController.text = material.clasificacion;
         _tipoBienController.text = material.tipoBien;
         _consecutivoController.text = material.consecutivo;
+
         _isLoading = false;
       });
     } catch (e) {
@@ -125,7 +129,10 @@ class _EditMaterialScreenState extends State<EditMaterialScreen> {
     try {
       final updatedMaterial = MaterialModel(
         numId: widget.numId,
-        cantidad: _cantidadController.text.trim(),
+
+        // 🔥 CORREGIDO: convertir a int
+        cantidad: int.parse(_cantidadController.text.trim()),
+
         descripcion: _descripcionController.text.trim(),
         marca: _marcaController.text.trim(),
         modelo: _modeloController.text.trim(),
@@ -134,6 +141,7 @@ class _EditMaterialScreenState extends State<EditMaterialScreen> {
         clasificacion: _clasificacionController.text.trim(),
         tipoBien: _tipoBienController.text.trim(),
         consecutivo: _consecutivoController.text.trim(),
+
         fechaRegistro: _originalMaterial!.fechaRegistro,
         fechaModificacion: DateTime.now(),
         modificadoPor: _modificadoPorController.text.trim(),

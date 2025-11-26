@@ -52,10 +52,9 @@ class _AdminConfirmPrestamoScreenState
   }
 
   Future<void> _confirmarPrestamo(MaterialModel material) async {
-    // Verificar disponibilidad
-    final docRef = FirebaseFirestore.instance
-        .collection('materiales')
-        .doc(material.numId);
+    final docRef =
+    FirebaseFirestore.instance.collection('materiales').doc(material.numId);
+
     final snap = await docRef.get();
 
     if (!snap.exists) {
@@ -79,7 +78,6 @@ class _AdminConfirmPrestamoScreenState
       return;
     }
 
-    // Mostrar diálogo de confirmación
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -98,8 +96,8 @@ class _AdminConfirmPrestamoScreenState
             ),
             Text(
               widget.userData['nombreCompleto'] ?? 'N/A',
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold),
+              style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -117,8 +115,8 @@ class _AdminConfirmPrestamoScreenState
             ),
             Text(
               material.descripcion,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold),
+              style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -155,7 +153,6 @@ class _AdminConfirmPrestamoScreenState
 
     if (confirm != true) return;
 
-    // Crear préstamo
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final materialRef = FirebaseFirestore.instance
@@ -172,7 +169,6 @@ class _AdminConfirmPrestamoScreenState
           throw Exception('Material sin stock');
         }
 
-        // Crear préstamo
         final prestamoRef =
         FirebaseFirestore.instance.collection('prestamos').doc();
         transaction.set(prestamoRef, {
@@ -191,7 +187,6 @@ class _AdminConfirmPrestamoScreenState
           'qrUsuario': widget.userData['qrData'],
         });
 
-        // Decrementar cantidad del material
         transaction.update(materialRef, {
           'cantidad': currentCantidad - 1,
         });
@@ -206,7 +201,6 @@ class _AdminConfirmPrestamoScreenState
         ),
       );
 
-      // Volver a la pantalla principal del administrador
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (!mounted) return;
@@ -227,10 +221,15 @@ class _AdminConfirmPrestamoScreenState
         backgroundColor: const Color(0xFF1A2540),
         title: const Text('Seleccionar material'),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close, color: Colors.redAccent),
+          )
+        ],
       ),
       body: Column(
         children: [
-          // Información del usuario
           Container(
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(16),
@@ -248,24 +247,22 @@ class _AdminConfirmPrestamoScreenState
                     SizedBox(width: 8),
                     Text(
                       'Usuario validado',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style:
+                      TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 const Divider(color: Colors.white24, height: 24),
                 _buildUserInfoRow('Nombre', widget.userData['nombreCompleto']),
                 const SizedBox(height: 8),
-                _buildUserInfoRow('Núm. Control', widget.userData['numeroControl']),
+                _buildUserInfoRow(
+                    'Núm. Control', widget.userData['numeroControl']),
                 const SizedBox(height: 8),
                 _buildUserInfoRow('Correo', widget.userData['correo']),
               ],
             ),
           ),
 
-          // Buscador
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
@@ -288,7 +285,6 @@ class _AdminConfirmPrestamoScreenState
 
           const SizedBox(height: 16),
 
-          // Lista de materiales
           Expanded(
             child: StreamBuilder<List<MaterialModel>>(
               stream: _firestoreService.getAllMaterials(),
@@ -363,8 +359,8 @@ class _AdminConfirmPrestamoScreenState
                                     ),
                                   );
                                 }
-                                final d = s.data!.data()
-                                as Map<String, dynamic>?;
+                                final d =
+                                s.data!.data() as Map<String, dynamic>?;
                                 final cantidad =
                                 d != null ? _toInt(d['cantidad'] ?? 0) : 0;
                                 return Text(
@@ -379,7 +375,23 @@ class _AdminConfirmPrestamoScreenState
                                 );
                               },
                             ),
+
                             const SizedBox(width: 8),
+
+                            /// BOTÓN NUEVO
+                            IconButton(
+                              icon: const Icon(
+                                Icons.cancel,
+                                color: Colors.redAccent,
+                              ),
+                              tooltip: "Cancelar y volver",
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                            ),
+
+                            const SizedBox(width: 8),
+
                             IconButton(
                               icon: const Icon(
                                 Icons.check_circle,
