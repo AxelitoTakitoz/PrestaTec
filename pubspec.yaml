@@ -23,6 +23,7 @@ dependencies:
   qr: ^3.0.1
   barcode_widget: ^2.0.4
   flutter_barcode_listener: ^0.1.2
+  mobile_scanner: ^5.2.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

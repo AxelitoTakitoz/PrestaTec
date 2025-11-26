@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../app/routes.dart';
 import '../../admin/presentation/historial_prestamos_admin.dart';
 import '../../admin/presentation/generar_reporte_admin.dart';
 import '../../admin/presentation/materials_list_screen.dart';
+import '../../admin/presentation/ver_perfil_admin.dart';
+import '../../admin/presentation/prestamos_list_screen.dart';
+import '../../admin/presentation/admin_scan_qr_screen.dart';
+import '../../admin/presentation/admin_confirm_prestamo_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
 
-  void _confirmLogout(BuildContext context) {
-    showDialog(
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
@@ -16,20 +21,54 @@ class AdminHomeScreen extends StatelessWidget {
           content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                Navigator.of(context).pushReplacementNamed(AppRoutes.login);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Cerrar sesión'),
             ),
           ],
         );
       },
     );
+
+    if (confirm == true) {
+      await FirebaseAuth.instance.signOut();
+      if (!context.mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.login,
+            (_) => false,
+      );
+    }
+  }
+
+  void _navigateToProfile(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const VerPerfilAdmin(),
+      ),
+    );
+  }
+
+  void _navigateToScanQr(BuildContext context) async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AdminScanQrScreen(),
+      ),
+    );
+
+    if (result != null && context.mounted) {
+      // Ir a pantalla de confirmación del préstamo
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AdminConfirmPrestamoScreen(userData: result),
+        ),
+      );
+    }
   }
 
   @override
@@ -42,10 +81,34 @@ class AdminHomeScreen extends StatelessWidget {
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'logout') _confirmLogout(context);
+              if (value == 'profile') {
+                _navigateToProfile(context);
+              } else if (value == 'logout') {
+                _confirmLogout(context);
+              }
             },
             itemBuilder: (context) => const [
-              PopupMenuItem(value: 'logout', child: Text('Cerrar sesión')),
+              PopupMenuItem<String>(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.admin_panel_settings, size: 20),
+                    SizedBox(width: 12),
+                    Text('Ver perfil'),
+                  ],
+                ),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, size: 20),
+                    SizedBox(width: 12),
+                    Text('Cerrar sesión'),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -66,27 +129,27 @@ class AdminHomeScreen extends StatelessWidget {
         surface: cs.surface,
         onSurface: cs.onSurface,
         onPrimary: cs.onPrimary,
+        onScanQr: () => _navigateToScanQr(context),
         onRegister: () =>
             Navigator.of(context).pushNamed(AppRoutes.registerItem),
-
-        /* Acceso al historial */
         onHistory: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const AdminHistorialPrestamosScreen(),
           ),
         ),
-
-        /* Acceso al reporte */
         onReport: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const GenerarReporteAdmin(),
           ),
         ),
-
-        /* Acceso a la lista de materiales */
         onMaterialsList: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const MaterialsListScreen(),
+          ),
+        ),
+        onPrestamosList: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const PrestamosListScreen(),
           ),
         ),
       ),
@@ -94,27 +157,30 @@ class AdminHomeScreen extends StatelessWidget {
   }
 }
 
-
 /* Widget de la barra inferior curva */
 class _CurvedActionsBar extends StatelessWidget {
   final Color primary;
   final Color surface;
   final Color onSurface;
   final Color onPrimary;
+  final VoidCallback onScanQr;
   final VoidCallback onRegister;
   final VoidCallback onHistory;
   final VoidCallback onReport;
   final VoidCallback onMaterialsList;
+  final VoidCallback onPrestamosList;
 
   const _CurvedActionsBar({
     required this.primary,
     required this.surface,
     required this.onSurface,
     required this.onPrimary,
+    required this.onScanQr,
     required this.onRegister,
     required this.onHistory,
     required this.onReport,
     required this.onMaterialsList,
+    required this.onPrestamosList,
   });
 
   @override
@@ -122,7 +188,7 @@ class _CurvedActionsBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: SizedBox(
-        height: 240,
+        height: 270,
         child: Stack(
           alignment: Alignment.bottomCenter,
           children: [
@@ -132,6 +198,7 @@ class _CurvedActionsBar extends StatelessWidget {
               ),
             ),
 
+            // Botón central: Escanear QR
             Positioned(
               top: 18,
               child: Column(
@@ -143,16 +210,20 @@ class _CurvedActionsBar extends StatelessWidget {
                     shape: const CircleBorder(),
                     child: InkWell(
                       customBorder: const CircleBorder(),
-                      onTap: onRegister,
-                      child: const Padding(
-                        padding: EdgeInsets.all(22),
-                        child: Icon(Icons.qr_code_2, size: 44),
+                      onTap: onScanQr,
+                      child: Padding(
+                        padding: const EdgeInsets.all(22),
+                        child: Icon(
+                          Icons.qr_code_scanner,
+                          size: 44,
+                          color: onSurface,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Registrar\nartículo\nnuevo',
+                    'Escanear\nQR de\nusuario',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: onPrimary,
@@ -171,16 +242,17 @@ class _CurvedActionsBar extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  // Columna izquierda
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _ActionBubble(
-                        icon: Icons.history,
-                        label: 'Historial\nde préstamos',
+                        icon: Icons.add_box,
+                        label: 'Registrar\nartículo',
                         surface: surface,
                         onSurface: onSurface,
                         textColor: onPrimary,
-                        onTap: onHistory,
+                        onTap: onRegister,
                       ),
                       const SizedBox(height: 16),
                       _ActionBubble(
@@ -194,13 +266,28 @@ class _CurvedActionsBar extends StatelessWidget {
                     ],
                   ),
 
-                  _ActionBubble(
-                    icon: Icons.insert_drive_file_outlined,
-                    label: 'Generar\nreporte',
-                    surface: surface,
-                    onSurface: onSurface,
-                    textColor: onPrimary,
-                    onTap: onReport,
+                  // Columna derecha
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ActionBubble(
+                        icon: Icons.assignment_turned_in,
+                        label: 'Gestión de\npréstamos',
+                        surface: surface,
+                        onSurface: onSurface,
+                        textColor: onPrimary,
+                        onTap: onPrestamosList,
+                      ),
+                      const SizedBox(height: 16),
+                      _ActionBubble(
+                        icon: Icons.insert_drive_file_outlined,
+                        label: 'Generar\nreporte',
+                        surface: surface,
+                        onSurface: onSurface,
+                        textColor: onPrimary,
+                        onTap: onReport,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -211,7 +298,6 @@ class _CurvedActionsBar extends StatelessWidget {
     );
   }
 }
-
 
 /* Burbujas circulares de acciones */
 class _ActionBubble extends StatelessWidget {
@@ -259,7 +345,6 @@ class _ActionBubble extends StatelessWidget {
     );
   }
 }
-
 
 /* Pintor de la curva inferior */
 class _ArcPainter extends CustomPainter {
