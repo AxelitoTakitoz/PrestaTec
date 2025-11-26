@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-
-// PDF & printing
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import 'dart:typed_data';
-import 'package:barcode_widget/barcode_widget.dart' as barcode;
 
 import '../../../app/models/material_model.dart';
 import '../../../app/services/firestore_service.dart';
+import 'qr_scanner_screen.dart';
 
 class SolicitarArticulo extends StatefulWidget {
   const SolicitarArticulo({super.key});
@@ -25,13 +18,13 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
-  String? ticketId;
-  Map<String, dynamic>? ticketData;
+  String? prestamoId;
+  Map<String, dynamic>? prestamoData;
 
   @override
   void initState() {
     super.initState();
-    _checkExistingTicket();
+    _checkExistingPrestamo();
   }
 
   @override
@@ -40,22 +33,22 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
     super.dispose();
   }
 
-  /// Revisa si ya existe ticket pendiente para el usuario
-  Future<void> _checkExistingTicket() async {
+  /// Revisa si ya existe préstamo activo para el usuario
+  Future<void> _checkExistingPrestamo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final q = await FirebaseFirestore.instance
-        .collection('tickets')
+        .collection('prestamos')
         .where('userId', isEqualTo: user.uid)
-        .where('status', isEqualTo: 'pendiente')
+        .where('estado', isEqualTo: 'activo')
         .limit(1)
         .get();
 
     if (q.docs.isNotEmpty) {
       setState(() {
-        ticketId = q.docs.first.id;
-        ticketData = q.docs.first.data();
+        prestamoId = q.docs.first.id;
+        prestamoData = q.docs.first.data();
       });
     }
   }
@@ -68,10 +61,12 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
     return 0;
   }
 
-  /// Muestra diálogo de confirmación (ventana emergente)
+  /// Muestra diálogo de confirmación
   Future<void> _mostrarDialogoConfirmacion(MaterialModel material) async {
     // Validar cantidad disponible
-    final docRef = FirebaseFirestore.instance.collection('materiales').doc(material.numId);
+    final docRef = FirebaseFirestore.instance
+        .collection('materiales')
+        .doc(material.numId);
     final snap = await docRef.get();
 
     if (!snap.exists) {
@@ -94,243 +89,105 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
     }
 
     if (!mounted) return;
-    showDialog(
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A2540),
-        title: const Text("Confirmar solicitud", style: TextStyle(color: Colors.white)),
+        title: const Text(
+          "Confirmar solicitud",
+          style: TextStyle(color: Colors.white),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Material: ${material.descripcion}", style: const TextStyle(color: Colors.white70)),
+            Text(
+              "Material: ${material.descripcion}",
+              style: const TextStyle(color: Colors.white70),
+            ),
             const SizedBox(height: 6),
-            Text("Marca: ${material.marca}", style: const TextStyle(color: Colors.white70)),
+            Text(
+              "Marca: ${material.marca}",
+              style: const TextStyle(color: Colors.white70),
+            ),
             const SizedBox(height: 6),
-            Text("Ubicación: ${material.ubicacion}", style: const TextStyle(color: Colors.white70)),
+            Text(
+              "Ubicación: ${material.ubicacion}",
+              style: const TextStyle(color: Colors.white70),
+            ),
             const SizedBox(height: 10),
-            Text("Cantidad disponible: $cantidad", style: const TextStyle(color: Colors.white70)),
+            Text(
+              "Cantidad disponible: $cantidad",
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.qr_code_scanner, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Deberás escanear tu QR personal para confirmar',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text("Cancelar", style: TextStyle(color: Colors.red)),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _crearTicket(material);
-            },
-            child: const Text("Aceptar", style: TextStyle(color: Colors.greenAccent)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Crear ticket + QR + disminuir cantidad
-  Future<void> _crearTicket(MaterialModel material) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay usuario autenticado.')),
-      );
-      return;
-    }
-
-    // Evitar duplicados
-    if (ticketId != null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Ya tienes un artículo solicitado.")),
-      );
-      return;
-    }
-
-    final materialRef = FirebaseFirestore.instance.collection('materiales').doc(material.numId);
-
-    try {
-      final ticketRef = await FirebaseFirestore.instance.runTransaction((tx) async {
-        // Verificar nuevamente si hay un ticket pendiente
-        final existingTickets = await FirebaseFirestore.instance
-            .collection('tickets')
-            .where('userId', isEqualTo: user.uid)
-            .where('status', isEqualTo: 'pendiente')
-            .limit(1)
-            .get();
-
-        if (existingTickets.docs.isNotEmpty) {
-          throw Exception('Ya tienes un ticket pendiente.');
-        }
-
-        final matSnap = await tx.get(materialRef);
-
-        if (!matSnap.exists) {
-          throw Exception('Material no existe en la base de datos.');
-        }
-
-        final matData = matSnap.data()!;
-        final int cantidadActual = _toInt(matData['cantidad'] ?? 0);
-
-        if (cantidadActual <= 0) {
-          throw Exception('No hay stock disponible.');
-        }
-
-        // Generar string único para QR
-        final qrString = "${user.uid}_${material.numId}_${DateTime.now().millisecondsSinceEpoch}";
-
-        // Crear ticket
-        final newTicketRef = FirebaseFirestore.instance.collection('tickets').doc();
-        tx.set(newTicketRef, {
-          'userId': user.uid,
-          'userEmail': user.email ?? 'Sin email',
-          'materialId': material.numId,
-          'materialDescripcion': material.descripcion,
-          'fecha': FieldValue.serverTimestamp(),
-          'status': 'pendiente',
-          'qr': qrString,
-        });
-
-        // Decrementar cantidad
-        tx.update(materialRef, {'cantidad': cantidadActual - 1});
-
-        return newTicketRef;
-      });
-
-      // Esperar un momento para que serverTimestamp se escriba
-      await Future.delayed(const Duration(milliseconds: 500));
-      final snap = await ticketRef.get();
-
-      if (!mounted) return;
-      setState(() {
-        ticketId = ticketRef.id;
-        ticketData = snap.data();
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Solicitud creada correctamente')),
-      );
-
-      _mostrarTicketDialog(ticketData!);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
-    }
-  }
-
-  /// Ventana modal para mostrar el ticket
-  Future<void> _mostrarTicketDialog(Map<String, dynamic> ticket) async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2540),
-        title: const Text('Ticket generado', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            QrImageView(
-              data: ticket['qr'] ?? '',
-              version: QrVersions.auto,
-              size: 220,
-              backgroundColor: Colors.white,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              "Continuar",
+              style: TextStyle(color: Colors.greenAccent),
             ),
-            const SizedBox(height: 12),
-            Text('Material: ${ticket['materialDescripcion']}',
-                style: const TextStyle(color: Colors.white70)),
-            const SizedBox(height: 8),
-            Text('Usuario: ${ticket['userEmail']}',
-                style: const TextStyle(color: Colors.white70)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar', style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _generarPdfYCompartir(ticket);
-            },
-            child: const Text('Descargar PDF',
-                style: TextStyle(color: Colors.lightBlueAccent)),
           ),
         ],
       ),
     );
+
+    if (confirm == true) {
+      _abrirEscaner(material);
+    }
   }
 
-  /// Genera PDF con el QR (usando pw.BarcodeWidget directamente)
-  Future<void> _generarPdfYCompartir(Map<String, dynamic> ticket) async {
-    try {
-      // Crear PDF
-      final doc = pw.Document();
+  /// Abre el escáner QR
+  Future<void> _abrirEscaner(MaterialModel material) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => QrScannerScreen(
+          materialId: material.numId,
+          materialDescripcion: material.descripcion,
+        ),
+      ),
+    );
 
-      // Formatear fecha
-      String fechaStr = 'N/A';
-      if (ticket['fecha'] != null) {
-        if (ticket['fecha'] is Timestamp) {
-          fechaStr = (ticket['fecha'] as Timestamp).toDate().toString();
-        } else {
-          fechaStr = ticket['fecha'].toString();
-        }
-      }
-
-      doc.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('Ticket de préstamo',
-                  style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 20),
-              pw.Text('Usuario: ${ticket['userEmail'] ?? 'N/A'}',
-                  style: const pw.TextStyle(fontSize: 14)),
-              pw.SizedBox(height: 8),
-              pw.Text('Material: ${ticket['materialDescripcion'] ?? 'N/A'}',
-                  style: const pw.TextStyle(fontSize: 14)),
-              pw.SizedBox(height: 8),
-              pw.Text('Material ID: ${ticket['materialId'] ?? 'N/A'}',
-                  style: const pw.TextStyle(fontSize: 14)),
-              pw.SizedBox(height: 8),
-              pw.Text('Fecha: $fechaStr',
-                  style: const pw.TextStyle(fontSize: 14)),
-              pw.SizedBox(height: 30),
-              pw.Center(
-                child: pw.BarcodeWidget(
-                  data: ticket['qr'] ?? '',
-                  barcode: pw.Barcode.qrCode(),
-                  width: 250,
-                  height: 250,
-                ),
-              ),
-              pw.SizedBox(height: 15),
-              pw.Center(
-                child: pw.Text('Escanea el QR para validar el ticket',
-                    style: const pw.TextStyle(fontSize: 12)),
-              ),
-            ],
-          );
-        },
-      ));
-
-      final pdfBytes = await doc.save();
-
-      // Compartir PDF
-      await Printing.sharePdf(
-        bytes: pdfBytes,
-        filename: 'ticket_${ticketId ?? DateTime.now().millisecondsSinceEpoch}.pdf',
-      );
-    } catch (e) {
+    if (result == true) {
+      // Préstamo creado exitosamente
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al generar PDF: $e')),
+        const SnackBar(
+          content: Text('¡Préstamo registrado correctamente!'),
+          backgroundColor: Colors.green,
+        ),
       );
+      // Recargar datos
+      await _checkExistingPrestamo();
+      setState(() {});
     }
   }
 
@@ -348,9 +205,20 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
     }).toList();
   }
 
-  /// Pantalla del ticket activo
-  Widget _buildTicketScreen() {
-    if (ticketData == null) return const SizedBox();
+  /// Pantalla del préstamo activo
+  Widget _buildPrestamoScreen() {
+    if (prestamoData == null) return const SizedBox();
+
+    String fechaStr = 'N/A';
+    if (prestamoData!['fechaPrestamo'] != null) {
+      try {
+        final fecha = (prestamoData!['fechaPrestamo'] as Timestamp).toDate();
+        fechaStr =
+        '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year} ${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
+      } catch (e) {
+        fechaStr = 'Fecha inválida';
+      }
+    }
 
     return Center(
       child: SingleChildScrollView(
@@ -358,97 +226,89 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text("Tu ticket activo",
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            const Icon(
+              Icons.assignment_turned_in,
+              size: 80,
+              color: Colors.green,
+            ),
             const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
+            const Text(
+              "Préstamo activo",
+              style: TextStyle(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
               ),
-              child: QrImageView(
-                data: ticketData!['qr'] ?? '',
-                size: 240,
-                backgroundColor: Colors.white,
+            ),
+            const SizedBox(height: 30),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A2540).withOpacity(0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildInfoRow(
+                    'Material',
+                    prestamoData!['materialDescripcion'] ?? 'N/A',
+                    Icons.inventory_2,
+                  ),
+                  const Divider(color: Colors.white24, height: 32),
+                  _buildInfoRow(
+                    'ID Material',
+                    prestamoData!['materialId'] ?? 'N/A',
+                    Icons.tag,
+                  ),
+                  const Divider(color: Colors.white24, height: 32),
+                  _buildInfoRow(
+                    'Usuario',
+                    prestamoData!['nombreCompleto'] ?? 'N/A',
+                    Icons.person,
+                  ),
+                  const Divider(color: Colors.white24, height: 32),
+                  _buildInfoRow(
+                    'Número de control',
+                    prestamoData!['numeroControl'] ?? 'N/A',
+                    Icons.badge,
+                  ),
+                  const Divider(color: Colors.white24, height: 32),
+                  _buildInfoRow(
+                    'Fecha de préstamo',
+                    fechaStr,
+                    Icons.calendar_today,
+                  ),
+                  const Divider(color: Colors.white24, height: 32),
+                  _buildInfoRow(
+                    'Estado',
+                    (prestamoData!['estado'] ?? 'N/A').toUpperCase(),
+                    Icons.info,
+                    valueColor: Colors.green,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+            const Text(
+              'Para devolver el material, acude con el administrador',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 13,
               ),
             ),
             const SizedBox(height: 20),
-            Text("Material: ${ticketData!['materialDescripcion']}",
-                style: const TextStyle(color: Colors.white, fontSize: 18)),
-            const SizedBox(height: 10),
-            Text("ID: ${ticketData!['materialId']}",
-                style: const TextStyle(color: Colors.white70, fontSize: 14)),
-            const SizedBox(height: 30),
             ElevatedButton.icon(
               icon: const Icon(Icons.cancel),
-              label: const Text("Cancelar solicitud"),
+              label: const Text("Cancelar préstamo"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               ),
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (c) => AlertDialog(
-                    backgroundColor: const Color(0xFF1A2540),
-                    title: const Text('¿Cancelar solicitud?',
-                        style: TextStyle(color: Colors.white)),
-                    content: const Text(
-                      'Se revertirá la cantidad del material y el ticket será cancelado.',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('No', style: TextStyle(color: Colors.white70)),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Sí', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirm == true) {
-                  try {
-                    final matRef = FirebaseFirestore.instance
-                        .collection('materiales')
-                        .doc(ticketData!['materialId']);
-
-                    await FirebaseFirestore.instance.runTransaction((tx) async {
-                      // Actualizar ticket
-                      final ticketRef = FirebaseFirestore.instance
-                          .collection('tickets')
-                          .doc(ticketId);
-                      tx.update(ticketRef, {'status': 'cancelado'});
-
-                      // Aumentar cantidad
-                      final snap = await tx.get(matRef);
-                      if (snap.exists) {
-                        final cur = _toInt(snap.data()!['cantidad'] ?? 0);
-                        tx.update(matRef, {'cantidad': cur + 1});
-                      }
-                    });
-
-                    if (!mounted) return;
-                    setState(() {
-                      ticketId = null;
-                      ticketData = null;
-                    });
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Solicitud cancelada correctamente')),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error al cancelar: $e')),
-                    );
-                  }
-                }
-              },
+              onPressed: () => _cancelarPrestamo(),
             ),
           ],
         ),
@@ -456,19 +316,122 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
     );
   }
 
+  Widget _buildInfoRow(String label, String value, IconData icon,
+      {Color? valueColor}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.white54, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  color: valueColor ?? Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _cancelarPrestamo() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2540),
+        title: const Text(
+          '¿Cancelar préstamo?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Se revertirá la cantidad del material y el préstamo será cancelado.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('No', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Sí', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final matRef = FirebaseFirestore.instance
+            .collection('materiales')
+            .doc(prestamoData!['materialId']);
+
+        await FirebaseFirestore.instance.runTransaction((tx) async {
+          // Actualizar préstamo
+          final prestamoRef =
+          FirebaseFirestore.instance.collection('prestamos').doc(prestamoId);
+          tx.update(prestamoRef, {
+            'estado': 'cancelado',
+            'fechaDevolucion': FieldValue.serverTimestamp(),
+          });
+
+          // Aumentar cantidad
+          final snap = await tx.get(matRef);
+          if (snap.exists) {
+            final cur = _toInt(snap.data()!['cantidad'] ?? 0);
+            tx.update(matRef, {'cantidad': cur + 1});
+          }
+        });
+
+        if (!mounted) return;
+        setState(() {
+          prestamoId = null;
+          prestamoData = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Préstamo cancelado correctamente')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cancelar: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F1D3E),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF1A2540),
         title: const Text('Solicitar artículo'),
+        foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.maybePop(context),
         ),
       ),
-      body: ticketId != null
-          ? _buildTicketScreen()
+      body: prestamoId != null
+          ? _buildPrestamoScreen()
           : SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -480,9 +443,11 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
                 decoration: InputDecoration(
                   hintText: 'Buscar material',
                   hintStyle: const TextStyle(color: Colors.white70),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                  prefixIcon:
+                  const Icon(Icons.search, color: Colors.white70),
                   filled: true,
-                  fillColor: const Color(0xFF1A2540).withOpacity(0.6),
+                  fillColor:
+                  const Color(0xFF1A2540).withOpacity(0.6),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -495,9 +460,11 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
                 child: StreamBuilder<List<MaterialModel>>(
                   stream: _firestoreService.getAllMaterials(),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
+                        child: CircularProgressIndicator(
+                            color: Colors.white),
                       );
                     }
 
@@ -544,7 +511,8 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
                             ),
                             subtitle: Text(
                               "Marca: ${material.marca}  |  Ubicación: ${material.ubicacion}",
-                              style: const TextStyle(color: Colors.white70),
+                              style:
+                              const TextStyle(color: Colors.white70),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -564,7 +532,8 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
                                         ),
                                       );
                                     }
-                                    final d = s.data!.data() as Map<String, dynamic>?;
+                                    final d = s.data!.data()
+                                    as Map<String, dynamic>?;
                                     final cantidad = d != null
                                         ? _toInt(d['cantidad'] ?? 0)
                                         : 0;
@@ -586,7 +555,8 @@ class _SolicitarArticuloState extends State<SolicitarArticulo> {
                                     Icons.add_circle,
                                     color: Colors.greenAccent,
                                   ),
-                                  onPressed: () => _mostrarDialogoConfirmacion(material),
+                                  onPressed: () =>
+                                      _mostrarDialogoConfirmacion(material),
                                 ),
                               ],
                             ),

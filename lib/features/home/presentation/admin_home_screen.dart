@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../app/routes.dart';
 import '../../admin/presentation/historial_prestamos_admin.dart';
 import '../../admin/presentation/generar_reporte_admin.dart';
@@ -8,7 +7,6 @@ import '../../admin/presentation/materials_list_screen.dart';
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
 
-  // Función para confirmar y cerrar sesión
   void _confirmLogout(BuildContext context) {
     showDialog(
       context: context,
@@ -18,9 +16,7 @@ class AdminHomeScreen extends StatelessWidget {
           content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             TextButton(
@@ -39,26 +35,23 @@ class AdminHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Interfaz de administrador'),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'logout') {
-                _confirmLogout(context);
-              }
+              if (value == 'logout') _confirmLogout(context);
             },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Text('Cerrar sesión'),
-              ),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'logout', child: Text('Cerrar sesión')),
             ],
-            icon: const Icon(Icons.more_horiz),
           ),
         ],
       ),
+
+      /* Pantalla inicial cuando no haya préstamos */
       body: const Padding(
         padding: EdgeInsets.all(16),
         child: Align(
@@ -66,22 +59,31 @@ class AdminHomeScreen extends StatelessWidget {
           child: Text('Sin prestamos activos'),
         ),
       ),
+
+      /* Barra inferior de accesos */
       bottomNavigationBar: _CurvedActionsBar(
         primary: cs.primary,
         surface: cs.surface,
         onSurface: cs.onSurface,
         onPrimary: cs.onPrimary,
-        onRegister: () => Navigator.of(context).pushNamed(AppRoutes.registerItem),
+        onRegister: () =>
+            Navigator.of(context).pushNamed(AppRoutes.registerItem),
+
+        /* Acceso al historial */
         onHistory: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const AdminHistorialPrestamosScreen(),
           ),
         ),
+
+        /* Acceso al reporte */
         onReport: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const GenerarReporteAdmin(),
           ),
         ),
+
+        /* Acceso a la lista de materiales */
         onMaterialsList: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const MaterialsListScreen(),
@@ -92,6 +94,8 @@ class AdminHomeScreen extends StatelessWidget {
   }
 }
 
+
+/* Widget de la barra inferior curva */
 class _CurvedActionsBar extends StatelessWidget {
   final Color primary;
   final Color surface;
@@ -118,14 +122,16 @@ class _CurvedActionsBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: SizedBox(
-        height: 240, // Aumentado para acomodar 3 botones
+        height: 240,
         child: Stack(
           alignment: Alignment.bottomCenter,
           children: [
-            // Fondo curvo
-            Positioned.fill(child: CustomPaint(painter: _ArcPainter(color: primary))),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _ArcPainter(color: primary),
+              ),
+            ),
 
-            // Burbuja central + texto
             Positioned(
               top: 18,
               child: Column(
@@ -138,15 +144,15 @@ class _CurvedActionsBar extends StatelessWidget {
                     child: InkWell(
                       customBorder: const CircleBorder(),
                       onTap: onRegister,
-                      child: Padding(
-                        padding: const EdgeInsets.all(22),
-                        child: Icon(Icons.qr_code_2, size: 44, color: onSurface),
+                      child: const Padding(
+                        padding: EdgeInsets.all(22),
+                        child: Icon(Icons.qr_code_2, size: 44),
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Registrar\narticulo\nnuevo',
+                    'Registrar\nartículo\nnuevo',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: onPrimary,
@@ -159,7 +165,6 @@ class _CurvedActionsBar extends StatelessWidget {
               ),
             ),
 
-            // Acciones laterales (ahora 3 botones)
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
               child: Row(
@@ -171,7 +176,7 @@ class _CurvedActionsBar extends StatelessWidget {
                     children: [
                       _ActionBubble(
                         icon: Icons.history,
-                        label: 'Historial\nde prestamos',
+                        label: 'Historial\nde préstamos',
                         surface: surface,
                         onSurface: onSurface,
                         textColor: onPrimary,
@@ -180,7 +185,7 @@ class _CurvedActionsBar extends StatelessWidget {
                       const SizedBox(height: 16),
                       _ActionBubble(
                         icon: Icons.list_alt,
-                        label: 'Ver lista de\nmateriales',
+                        label: 'Lista de\nmateriales',
                         surface: surface,
                         onSurface: onSurface,
                         textColor: onPrimary,
@@ -188,6 +193,7 @@ class _CurvedActionsBar extends StatelessWidget {
                       ),
                     ],
                   ),
+
                   _ActionBubble(
                     icon: Icons.insert_drive_file_outlined,
                     label: 'Generar\nreporte',
@@ -206,6 +212,8 @@ class _CurvedActionsBar extends StatelessWidget {
   }
 }
 
+
+/* Burbujas circulares de acciones */
 class _ActionBubble extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -252,7 +260,8 @@ class _ActionBubble extends StatelessWidget {
   }
 }
 
-/// Dibuja la "semicircunferencia" del fondo
+
+/* Pintor de la curva inferior */
 class _ArcPainter extends CustomPainter {
   final Color color;
   _ArcPainter({required this.color});
@@ -260,12 +269,14 @@ class _ArcPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
+
     final path = Path()
-      ..moveTo(0, 60)
-      ..quadraticBezierTo(size.width / 2, -80, size.width, 60)
+      ..moveTo(0, 0)
+      ..quadraticBezierTo(size.width / 2, -120, size.width, 0)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
+
     canvas.drawPath(path, paint);
   }
 

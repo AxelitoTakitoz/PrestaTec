@@ -271,7 +271,7 @@ class _GenerarReporteAdminState extends State<GenerarReporteAdmin> {
                             style: TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            'Fecha de registro DD/MM/AAAA',
+                            '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
                             style: TextStyle(color: Colors.white70, fontSize: 12),
                           ),
                           activeColor: Color(0xFF6C8BD7),

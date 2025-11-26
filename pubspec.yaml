@@ -22,6 +22,7 @@ dependencies:
   image: ^4.0.17  # o la última versión
   qr: ^3.0.1
   barcode_widget: ^2.0.4
+  flutter_barcode_listener: ^0.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
