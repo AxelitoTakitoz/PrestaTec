@@ -27,6 +27,35 @@ class RoleGateScreen extends StatelessWidget {
           return const LoginScreen();
         }
 
+        // ================================
+        // 🔥 AGREGADO: validar verificación
+        // ================================
+        if (!user.emailVerified) {
+          return Scaffold(
+            body: Center(
+              child: AlertDialog(
+                title: Text("Correo no verificado"),
+                content: Text(
+                  "Debes verificar tu correo institucional para continuar.\n\n"
+                      "Revisa tu bandeja de entrada.",
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      await user.sendEmailVerification();
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => LoginScreen()),
+                      );
+                    },
+                    child: Text("Reenviar correo"),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return FutureBuilder<bool>(
           future: authService.isAdminEmail(user.email ?? ''),
           builder: (context, adminSnap) {

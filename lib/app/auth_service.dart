@@ -32,7 +32,6 @@ class AuthService {
       final doc = await _db.collection('admins').doc(clean).get();
       return doc.exists;
     } catch (_) {
-      // Si reglas están mal o no hay permiso, NO truenes la app.
       return false;
     }
   }
@@ -42,5 +41,27 @@ class AuthService {
     final em = u?.email;
     if (em == null) return false;
     return isAdminEmail(em);
+  }
+
+  // =====================================================
+  // 🔥 AGREGADO (SIN MODIFICAR LO TUYO)
+  // =====================================================
+
+  Future<bool> isEmailVerified() async {
+    final user = _auth.currentUser;
+    await user?.reload();
+    return user?.emailVerified ?? false;
+  }
+
+  Future<void> resendVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user != null && !user.emailVerified) {
+      await user.sendEmailVerification();
+    }
+  }
+
+  Future<User?> refreshUser() async {
+    await _auth.currentUser?.reload();
+    return _auth.currentUser;
   }
 }

@@ -33,12 +33,56 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
 
     try {
+      // 1. Login normal
       await _authService.signIn(_email.text, _pass.text);
 
+      // 2. Checar si el usuario verificó su correo
+      final user = FirebaseAuth.instance.currentUser;
+      await user?.reload(); // refrescar info
+
+      if (user != null && !user.emailVerified) {
+        // Mostrar popup
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text("Correo no verificado"),
+            content: Text(
+                "Tu correo institucional aún no ha sido verificado.\n\n"
+                    "Debes abrir el enlace que te enviamos para poder ingresar.\n\n"
+                    "¿Quieres reenviar el correo de verificación?"
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("Cancelar"),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await user.sendEmailVerification();
+                  Navigator.pop(context);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Correo de verificación reenviado")),
+                  );
+                },
+                child: Text("Reenviar"),
+              ),
+            ],
+          ),
+        );
+
+        // evitar que avance al RoleGate
+        await FirebaseAuth.instance.signOut();
+        setState(() => _loading = false);
+        return;
+      }
+
+      // 3. Todo bien → entrar al RoleGate
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const RoleGateScreen()),
       );
+
     } on FirebaseAuthException catch (e) {
       String mensaje;
       switch (e.code) {
