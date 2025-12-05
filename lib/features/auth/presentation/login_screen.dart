@@ -20,6 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _loading = false;
 
+  bool _verPass = false; // 👁️ para mostrar/ocultar contraseña
+
   @override
   void dispose() {
     _email.dispose();
@@ -27,77 +29,114 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // -----------------------------------------------------------
+  // 🔹 Recuperar contraseña
+  // -----------------------------------------------------------
+  Future<void> _recuperarContrasena() async {
+    final correo = _email.text.trim();
+    if (correo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ingresa tu correo para recuperar contraseña")),
+      );
+      return;
+    }
+
+    final enviar = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Recuperar contraseña"),
+        content: Text(
+            "Se enviará un enlace de recuperación a:\n\n$correo\n\n¿Deseas continuar?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Enviar")),
+        ],
+      ),
+    );
+
+    if (enviar != true) return;
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: correo);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Correo enviado. Revisa tu bandeja.")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("No se pudo enviar: $e")),
+      );
+    }
+  }
+
+  // -----------------------------------------------------------
+  // 🔹 INICIAR SESIÓN
+  // -----------------------------------------------------------
   Future<void> _signIn() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _loading = true);
 
     try {
-      // 1. Login normal
       await _authService.signIn(_email.text, _pass.text);
 
-      // 2. Checar si el usuario verificó su correo
       final user = FirebaseAuth.instance.currentUser;
-      await user?.reload(); // refrescar info
+      await user?.reload();
 
-      if (user != null && !user.emailVerified) {
-        // Mostrar popup
-        await showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text("Correo no verificado"),
-            content: Text(
-                "Tu correo institucional aún no ha sido verificado.\n\n"
-                    "Debes abrir el enlace que te enviamos para poder ingresar.\n\n"
-                    "¿Quieres reenviar el correo de verificación?"
+      // *** CORRECCIÓN IMPORTANTE ***
+      // Ahora valida si el correo del usuario actual es admin
+      final esAdmin = await _authService.isAdminEmail(user?.email ?? "");
+
+      // -----------------------------------------------------------
+      // 🔥 ADMIN NO NECESITA VERIFICAR CORREO
+      // -----------------------------------------------------------
+      if (!esAdmin) {
+        // Usuarios normales sí deben verificar correo
+        if (user != null && !user.emailVerified) {
+          await showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text("Correo no verificado"),
+              content: const Text(
+                  "Tu correo institucional aún no ha sido verificado.\n\n"
+                      "Debes abrir el enlace que te enviamos para poder ingresar.\n\n"
+                      "¿Quieres reenviar el correo de verificación?"
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancelar"),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await user.sendEmailVerification();
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Correo reenviado")),
+                    );
+                  },
+                  child: const Text("Reenviar"),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("Cancelar"),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await user.sendEmailVerification();
-                  Navigator.pop(context);
+          );
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Correo de verificación reenviado")),
-                  );
-                },
-                child: Text("Reenviar"),
-              ),
-            ],
-          ),
-        );
-
-        // evitar que avance al RoleGate
-        await FirebaseAuth.instance.signOut();
-        setState(() => _loading = false);
-        return;
+          await FirebaseAuth.instance.signOut();
+          setState(() => _loading = false);
+          return;
+        }
       }
 
-      // 3. Todo bien → entrar al RoleGate
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
+      Navigator.pushReplacement(
+        context,
         MaterialPageRoute(builder: (_) => const RoleGateScreen()),
       );
-
     } on FirebaseAuthException catch (e) {
       String mensaje;
       switch (e.code) {
         case 'user-not-found':
         case 'wrong-password':
           mensaje = 'Correo o contraseña incorrectos.';
-          break;
-        case 'invalid-email':
-          mensaje = 'El formato del correo no es válido.';
-          break;
-        case 'user-disabled':
-          mensaje = 'Esta cuenta ha sido deshabilitada.';
-          break;
-        case 'too-many-requests':
-          mensaje = 'Demasiados intentos. Intenta más tarde.';
           break;
         default:
           mensaje = 'No se pudo iniciar sesión.';
@@ -106,19 +145,14 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error inesperado: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  // -----------------------------------------------------------
+  // UI
+  // -----------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -141,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text('Bienvenido', style: Theme.of(context).textTheme.titleMedium),
+                  const Text('Bienvenido'),
                   const SizedBox(height: 16),
 
                   CircleAvatar(
@@ -151,9 +185,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
 
                   const SizedBox(height: 20),
-                  Text(
+                  const Text(
                     'Ingresa tu correo institucional y contraseña',
-                    style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
@@ -175,26 +208,34 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 12),
 
+                        // -----------------------------------------------------------
+                        // 🔹 Campo contraseña con OJITO
+                        // -----------------------------------------------------------
                         TextFormField(
                           controller: _pass,
-                          obscureText: true,
-                          decoration: const InputDecoration(
+                          obscureText: !_verPass,
+                          decoration: InputDecoration(
                             labelText: 'Contraseña',
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              icon: Icon(_verPass
+                                  ? Icons.visibility
+                                  : Icons.visibility_off),
+                              onPressed: () {
+                                setState(() => _verPass = !_verPass);
+                              },
+                            ),
                           ),
                           validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
                         ),
 
                         const SizedBox(height: 8),
+
                         Align(
                           alignment: Alignment.centerLeft,
                           child: TextButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Recuperación pendiente')),
-                              );
-                            },
+                            onPressed: _recuperarContrasena,
                             child: const Text('¿Olvidaste tu contraseña?'),
                           ),
                         ),

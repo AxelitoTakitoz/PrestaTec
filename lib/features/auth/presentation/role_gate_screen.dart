@@ -27,35 +27,9 @@ class RoleGateScreen extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // ================================
-        // 🔥 AGREGADO: validar verificación
-        // ================================
-        if (!user.emailVerified) {
-          return Scaffold(
-            body: Center(
-              child: AlertDialog(
-                title: Text("Correo no verificado"),
-                content: Text(
-                  "Debes verificar tu correo institucional para continuar.\n\n"
-                      "Revisa tu bandeja de entrada.",
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () async {
-                      await user.sendEmailVerification();
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => LoginScreen()),
-                      );
-                    },
-                    child: Text("Reenviar correo"),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
+        // ============================
+        //   🔥 Primero: ¿Es admin?
+        // ============================
         return FutureBuilder<bool>(
           future: authService.isAdminEmail(user.email ?? ''),
           builder: (context, adminSnap) {
@@ -65,8 +39,53 @@ class RoleGateScreen extends StatelessWidget {
               );
             }
 
-            final isAdmin = adminSnap.data == true;
-            return isAdmin ? const AdminHomeScreen() : const UserHomeScreen();
+            final bool isAdmin = adminSnap.data == true;
+
+            // ===============================
+            // 🔥 ADMIN → entra directo
+            // ===============================
+            if (isAdmin) {
+              return const AdminHomeScreen();
+            }
+
+            // =======================================
+            // 🔥 Usuario NORMAL → debe estar verificado
+            // =======================================
+            if (!user.emailVerified) {
+              return Scaffold(
+                body: Center(
+                  child: AlertDialog(
+                    title: const Text("Correo no verificado"),
+                    content: const Text(
+                      "Debes verificar tu correo institucional para continuar.\n\n"
+                          "Revisa tu bandeja de entrada.",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () async {
+                          await user.sendEmailVerification();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Correo de verificación reenviado."),
+                            ),
+                          );
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          );
+                        },
+                        child: const Text("Reenviar correo"),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            // ======================
+            // 🔥 Usuario normal ok
+            // ======================
+            return const UserHomeScreen();
           },
         );
       },
